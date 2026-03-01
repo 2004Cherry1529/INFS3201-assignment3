@@ -11,7 +11,7 @@ async function getAllEmployees() {
 }
 
 /**
- * Find employee by ID - using findOne (best practice!)
+ * Find employee by ID - using findOne
  */
 async function findEmployee(empId) {
     const db = await connectDB();
@@ -22,7 +22,7 @@ async function findEmployee(empId) {
  * Get shifts for an employee
  */
 /**
- * Get shifts for an employee - CORRECTED VERSION
+ * Get shifts for an employee 
  */
 async function getEmployeeShifts(empId) {
     const db = await connectDB();

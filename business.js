@@ -14,7 +14,7 @@ async function getAllEmployees() {
  * @returns {Object|null} Employee object or null
  */
 async function findEmployee(empId) {
-    return await persistence.findEmployee(empId)  // ← ADD THIS FUNCTION
+    return await persistence.findEmployee(empId)  
 }
 
 /**

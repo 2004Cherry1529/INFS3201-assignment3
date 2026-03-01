@@ -21,7 +21,8 @@ async function getEmployeeSchedule() {
     console.log('\n')
     console.log('date, start, end')
     for (let d of details) {
-        console.log('Shift object:', d)  // See what fields exist
+        //shows what each field sets
+        console.log('Shift object:', d)  
         console.log(`${d.date}, ${d.startTime}, ${d.endTime}`)
     }
 }

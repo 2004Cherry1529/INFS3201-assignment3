@@ -5,7 +5,6 @@ const business = require('./business');
 
 const app = express();
 
-// Simple Handlebars setup
 app.engine('hbs', engine({ extname: '.hbs', defaultLayout: false }));
 app.set('view engine', 'hbs');
 app.set('views', path.join(__dirname, 'views'));
@@ -13,9 +12,7 @@ app.set('views', path.join(__dirname, 'views'));
 // Middleware
 app.use(express.urlencoded({ extended: true }));
 
-// ========== ROUTES ==========
 
-// LANDING PAGE
 app.get('/', async (req, res) => {
     try {
         const employees = await business.getAllEmployees();
@@ -25,17 +22,13 @@ app.get('/', async (req, res) => {
     }
 });
 
-// EMPLOYEE DETAILS PAGE
 app.get('/employee/:id', async (req, res) => {
     try {
         const employee = await business.findEmployee(req.params.id);
         if (!employee) {
             return res.send('Employee not found');
         }
-        
-        const shifts = await business.getEmployeeShifts(req.params.id);
-        
-        // Add morning property to each shift
+        const shifts = await business.getEmployeeShifts(req.params.id);        
         for (let i = 0; i < shifts.length; i++) {
             const hour = parseInt(shifts[i].startTime.split(':')[0]);
             shifts[i].isMorning = (hour < 12);
@@ -48,7 +41,7 @@ app.get('/employee/:id', async (req, res) => {
     }
 });
 
-// EDIT FORM - GET
+//EDIT FORM-GET
 app.get('/employee/:id/edit', async (req, res) => {
     try {
         const employee = await business.findEmployee(req.params.id);
@@ -61,27 +54,21 @@ app.get('/employee/:id/edit', async (req, res) => {
     }
 });
 
-// EDIT FORM - POST
+//EDIT FORM-POST
 app.post('/employee/:id/edit', async (req, res) => {
     try {
         const { name, phone } = req.body;
-        const empId = req.params.id;
-        
-        // Trim inputs
+        const empId = req.params.id;  
         const trimmedName = name ? name.trim() : '';
-        const trimmedPhone = phone ? phone.trim() : '';
-        
-        // Validation
+        const trimmedPhone = phone ? phone.trim() : '';       
         if (!trimmedName) {
             return res.send('Error: Name cannot be empty');
-        }
-        
+        }     
         const phoneRegex = /^\d{4}-\d{4}$/;
         if (!phoneRegex.test(trimmedPhone)) {
             return res.send('Error: Phone must be in format 1234-5678');
         }
         
-        // Update
         await business.updateEmployeeRecord(empId, {
             name: trimmedName,
             phone: trimmedPhone
@@ -94,7 +81,7 @@ app.post('/employee/:id/edit', async (req, res) => {
     }
 });
 
-// Start server
+// Starting server
 app.listen(3001, () => {
     console.log('Server running on http://localhost:3001');
 });
