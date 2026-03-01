@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{employee.name}}</title>
+    <style>
+        .morning {
+            background-color: yellow;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{employee.name}}</h1>
+    <p>Phone: {{employee.phone}}</p>
+    <a href="/employee/{{employee.employeeId}}/edit">Edit Details</a>
+    
+    <h2>Shifts</h2>
+    {{#if shifts.length}}
+    <table border="1">
+        <tr>
+            <th>Date</th>
+            <th>Time</th>
+        </tr>
+        {{#each shifts}}
+        <tr>
+            <td>{{this.date}}</td>
+            {{#if this.isMorning}}
+                <td class="morning">{{this.startTime}} - {{this.endTime}}</td>
+            {{else}}
+                <td>{{this.startTime}} - {{this.endTime}}</td>
+            {{/if}}
+        </tr>
+        {{/each}}
+    </table>
+    {{else}}
+    <p>No shifts found</p>
+    {{/if}}
+    <br>
+    <a href="/">Back to list</a>
+</body>
+</html>

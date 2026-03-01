@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Employees</title>
+</head>
+<body>
+    <h1>Employees</h1>
+    <ul>
+        {{#each employees}}
+        <li>
+            <a href="/employee/{{this.employeeId}}">{{this.name}}</a>
+        </li>
+        {{/each}}
+    </ul>
+</body>
+</html>
