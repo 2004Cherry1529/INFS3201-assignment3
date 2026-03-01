@@ -8,11 +8,21 @@ const prompt=require('prompt-sync')()
  */
 async function getEmployeeSchedule() {
     let empId = prompt('Enter employee ID: ')
+    console.log('Looking for employee:', empId)
+    
     let details = await business.getEmployeeShifts(empId)
+    console.log('Raw data from business:', details)
+    
+    if (!details || details.length === 0) {
+        console.log('No shifts found for this employee')
+        return
+    }
+    
     console.log('\n')
-    console.log('date,start,end')
+    console.log('date, start, end')
     for (let d of details) {
-        console.log(`${d.date},${d.startTime},${d.endTime}`)
+        console.log('Shift object:', d)  // See what fields exist
+        console.log(`${d.date}, ${d.startTime}, ${d.endTime}`)
     }
 }
 

@@ -1,0 +1,42 @@
+[
+    {
+        "employeeId": "E001",
+        "name": "Alex Morgan",
+        "phone": "5555-0101"
+    },
+    {
+        "employeeId": "E002",
+        "name": "Samir Khan",
+        "phone": "5555-0102"
+    },
+    {
+        "employeeId": "E003",
+        "name": "Lina Perez",
+        "phone": "5555-0103"
+    },
+    {
+        "employeeId": "E004",
+        "name": "Daniel Wu",
+        "phone": "5555-0104"
+    },
+    {
+        "employeeId": "E005",
+        "name": "Fatima Noor",
+        "phone": "5555-0105"
+    },
+    {
+        "name": "Mohammed",
+        "phone": "1234-5678",
+        "employeeId": "E006"
+    },
+    {
+        "name": "blah",
+        "phone": "4321-4321",
+        "employeeId": "E007"
+    },
+    {
+        "name": "E008",
+        "phone": "6475-9385",
+        "employeeId": "E008"
+    }
+]
