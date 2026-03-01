@@ -8,10 +8,17 @@ async function getAllEmployees() {
     return await persistence.getAllEmployees()
 }
 
+/**
+ * Find a single employee by ID
+ * @param {string} empId 
+ * @returns {Object|null} Employee object or null
+ */
+async function findEmployee(empId) {
+    return await persistence.findEmployee(empId)  // ← ADD THIS FUNCTION
+}
 
 /**
- * Add a new employee record to the system. The empId is automatically generated based
- * on the next available ID number from what is already in the file.
+ * Add a new employee record to the system.
  * @param {{name:string, phone:string}} emp 
  */
 async function addEmployeeRecord(emp) {
@@ -26,6 +33,20 @@ async function addEmployeeRecord(emp) {
 async function getEmployeeShifts(empId) {
     return await persistence.getEmployeeShifts(empId)
 }
+
+/**
+ * Update an existing employee
+ * @param {string} empId 
+ * @param {{name:string, phone:string}} updates 
+ */
+async function updateEmployeeRecord(empId, updates) {
+    return await persistence.updateEmployeeRecord(empId, updates)
+}
+
 module.exports = {
-    getAllEmployees, addEmployeeRecord, getEmployeeShifts
+    getAllEmployees, 
+    findEmployee,          
+    addEmployeeRecord, 
+    getEmployeeShifts,    
+    updateEmployeeRecord
 }

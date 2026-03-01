@@ -98,6 +98,22 @@ async function getDailyMaxHours() {
     const config = require('./config.json');
     return config.dailyMaxHours;
 }
+/**
+ * Update an existing employee
+ * @param {string} empId - Employee ID
+ * @param {{name:string, phone:string}} updates - Fields to update
+ * @returns {Promise<Object>} Update result
+ */
+async function updateEmployeeRecord(empId, updates) {
+    const db = await connectDB();
+    return await db.collection('employees').updateOne(
+        { employeeId: empId },
+        { $set: { 
+            name: updates.name, 
+            phone: updates.phone 
+        }}
+    );
+}
 
 module.exports = {
     getAllEmployees,
@@ -105,5 +121,6 @@ module.exports = {
     getEmployeeShifts,
     addEmployeeRecord,
     getEmployeeShiftsOnDate,
-    getDailyMaxHours
+    getDailyMaxHours,
+    updateEmployeeRecord
 };
