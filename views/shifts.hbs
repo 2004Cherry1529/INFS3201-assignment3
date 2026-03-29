@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Employees – Scheduling System</title>
+    <title>Shifts – Scheduling System</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background: #f4f4f4; color: #333; }
@@ -24,11 +24,15 @@
         .btn-primary:hover { background: #357abd; }
         table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
         th { background: #4a90d9; color: #fff; text-align: left; padding: 0.75rem 1rem; font-size: 0.9rem; }
-        td { padding: 0.75rem 1rem; border-bottom: 1px solid #eee; font-size: 0.95rem; }
+        td { padding: 0.75rem 1rem; border-bottom: 1px solid #eee; font-size: 0.95rem; vertical-align: top; }
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: #f9f9f9; }
-        a.link { color: #4a90d9; text-decoration: none; }
-        a.link:hover { text-decoration: underline; }
+        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.75rem; margin: 1px; }
+        .morning { background: #fff3cd; color: #856404; }
+        .afternoon { background: #d1ecf1; color: #0c5460; }
+        .emp-list { display: flex; flex-wrap: wrap; gap: 4px; }
+        .emp-tag { background: #e8f0fe; color: #1a56db; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.8rem; }
+        .empty-emps { color: #aaa; font-size: 0.85rem; font-style: italic; }
         .empty { text-align: center; padding: 2rem; color: #888; background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
         .success { background: #d4edda; color: #155724; padding: 0.6rem 1rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; }
         .error-msg { background: #fdecea; color: #c0392b; padding: 0.6rem 1rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; }
@@ -50,39 +54,56 @@
         {{#if errorMsg}}<div class="error-msg">{{errorMsg}}</div>{{/if}}
 
         <div class="nav-tabs">
-            <a class="tab active" href="/">Employees</a>
-            <a class="tab" href="/shifts">Shifts</a>
+            <a class="tab" href="/">Employees</a>
+            <a class="tab active" href="/shifts">Shifts</a>
         </div>
 
         <div class="page-header">
-            <h2>All Employees</h2>
-            <a class="btn btn-primary" href="/employee/add">+ Add Employee</a>
+            <h2>All Shifts</h2>
+            <a class="btn btn-primary" href="/shifts/add">+ Add Shift</a>
         </div>
 
-        {{#if employees.length}}
+        {{#if shifts.length}}
         <table>
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Phone</th>
-                    <th>Actions</th>
+                    <th>Date</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Type</th>
+                    <th>Assigned Employees</th>
                 </tr>
             </thead>
             <tbody>
-                {{#each employees}}
+                {{#each shifts}}
                 <tr>
-                    <td><a class="link" href="/employee/{{_id}}">{{name}}</a></td>
-                    <td>{{phone}}</td>
+                    <td>{{date}}</td>
+                    <td>{{startTime}}</td>
+                    <td>{{endTime}}</td>
                     <td>
-                        <a class="link" href="/employee/{{_id}}">View</a> &nbsp;|&nbsp;
-                        <a class="link" href="/employee/{{_id}}/edit">Edit</a>
+                        {{#if isMorning}}
+                            <span class="badge morning">Morning</span>
+                        {{else}}
+                            <span class="badge afternoon">Afternoon</span>
+                        {{/if}}
+                    </td>
+                    <td>
+                        {{#if employeeDetails.length}}
+                            <div class="emp-list">
+                                {{#each employeeDetails}}
+                                    <span class="emp-tag">{{name}}</span>
+                                {{/each}}
+                            </div>
+                        {{else}}
+                            <span class="empty-emps">No employees assigned</span>
+                        {{/if}}
                     </td>
                 </tr>
                 {{/each}}
             </tbody>
         </table>
         {{else}}
-            <div class="empty">No employees yet. <a class="link" href="/employee/add">Add one</a>.</div>
+            <div class="empty">No shifts yet. <a href="/shifts/add" style="color:#4a90d9">Add one</a>.</div>
         {{/if}}
     </main>
 </body>

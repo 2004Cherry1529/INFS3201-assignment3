@@ -1,40 +1,121 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>{{employee.name}}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{employee.name}} – Scheduling System</title>
     <style>
-        .morning {
-            background-color: yellow;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #f4f4f4; color: #333; }
+        header { background: #4a90d9; color: #fff; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { font-size: 1.3rem; }
+        .user-bar { display: flex; align-items: center; gap: 1rem; font-size: 0.9rem; }
+        .logout-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: #fff; padding: 0.35rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+        .logout-btn:hover { background: rgba(255,255,255,0.3); }
+        main { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        .card { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 1.5rem; }
+        .profile { display: flex; gap: 1.5rem; align-items: flex-start; }
+        .photo img { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid #ddd; }
+        .photo .no-photo { width: 100px; height: 100px; border-radius: 50%; background: #e0e0e0; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #aaa; }
+        .info h2 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+        .info p { color: #555; margin-bottom: 0.3rem; }
+        .actions { margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .btn { padding: 0.4rem 1rem; border-radius: 4px; font-size: 0.9rem; text-decoration: none; border: none; cursor: pointer; }
+        .btn-primary { background: #4a90d9; color: #fff; }
+        .btn-primary:hover { background: #357abd; }
+        .btn-danger { background: #e74c3c; color: #fff; }
+        .btn-danger:hover { background: #c0392b; }
+        h3 { font-size: 1.1rem; margin-bottom: 1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 0.6rem 0.8rem; background: #f0f0f0; font-size: 0.85rem; color: #666; border-bottom: 2px solid #ddd; }
+        td { padding: 0.6rem 0.8rem; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+        tr:last-child td { border-bottom: none; }
+        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.75rem; }
+        .morning { background: #fff3cd; color: #856404; }
+        .afternoon { background: #d1ecf1; color: #0c5460; }
+        .empty { color: #888; font-size: 0.9rem; }
+        a.back { color: #4a90d9; text-decoration: none; display: inline-block; margin-bottom: 1rem; font-size: 0.9rem; }
+        a.back:hover { text-decoration: underline; }
+        .upload-form { margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+        .upload-form input[type=file] { font-size: 0.85rem; }
+        .upload-form button { padding: 0.3rem 0.8rem; background: #4a90d9; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
+        .upload-form button:hover { background: #357abd; }
     </style>
 </head>
 <body>
-    <h1>{{employee.name}}</h1>
-    <p>Phone: {{employee.phone}}</p>
-    <a href="/employee/{{employee.employeeId}}/edit">Edit Details</a>
-    
-    <h2>Shifts</h2>
-    {{#if shifts.length}}
-    <table border="1">
-        <tr>
-            <th>Date</th>
-            <th>Time</th>
-        </tr>
-        {{#each shifts}}
-        <tr>
-            <td>{{this.date}}</td>
-            {{#if this.isMorning}}
-                <td class="morning">{{this.startTime}} - {{this.endTime}}</td>
+    <header>
+        <h1>Scheduling System</h1>
+        <div class="user-bar">
+            <span>Logged in as <strong>{{username}}</strong></span>
+            <form method="POST" action="/logout" style="margin:0">
+                <button class="logout-btn" type="submit">Log out</button>
+            </form>
+        </div>
+    </header>
+
+    <main>
+        <a class="back" href="/">← Back to employees</a>
+
+        <div class="card">
+            <div class="profile">
+                <div class="photo">
+                    {{#if employee.photo}}
+                        <img src="{{employee.photo}}" alt="Photo of {{employee.name}}">
+                    {{else}}
+                        <div class="no-photo">?</div>
+                    {{/if}}
+                </div>
+                <div class="info">
+                    <h2>{{employee.name}}</h2>
+                    <p>📞 {{employee.phone}}</p>
+                    <div class="actions">
+                        <a class="btn btn-primary" href="/employee/{{employee._id}}/edit">Edit</a>
+                        <form method="POST" action="/employee/{{employee._id}}/delete" style="margin:0"
+                              onsubmit="return confirm('Delete {{employee.name}}? This cannot be undone.')">
+                            <button class="btn btn-danger" type="submit">Delete</button>
+                        </form>
+                    </div>
+                    <form class="upload-form" method="POST" action="/employee/{{employee._id}}/photo" enctype="multipart/form-data">
+                        <input type="file" name="photo" accept="image/*">
+                        <button type="submit">Upload photo</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Shifts</h3>
+            {{#if shifts.length}}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each shifts}}
+                    <tr>
+                        <td>{{date}}</td>
+                        <td>{{startTime}}</td>
+                        <td>{{endTime}}</td>
+                        <td>
+                            {{#if isMorning}}
+                                <span class="badge morning">Morning</span>
+                            {{else}}
+                                <span class="badge afternoon">Afternoon</span>
+                            {{/if}}
+                        </td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
             {{else}}
-                <td>{{this.startTime}} - {{this.endTime}}</td>
+                <p class="empty">No shifts assigned.</p>
             {{/if}}
-        </tr>
-        {{/each}}
-    </table>
-    {{else}}
-    <p>No shifts found</p>
-    {{/if}}
-    <br>
-    <a href="/">Back to list</a>
+        </div>
+    </main>
 </body>
 </html>

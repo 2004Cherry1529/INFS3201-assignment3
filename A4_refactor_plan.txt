@@ -1,0 +1,334 @@
+Student: Sumaya Al Asiri
+Date: 2026-03-29
+Course: INFS3201
+Assignment: 4 - MongoDB Scheduling System Refactor
+
+1. EXECUTIVE SUMMARY
+
+This document outlines the migration strategy from Assignment 3's relational-style
+MongoDB design to Assignment 4's document-oriented design, plus the addition
+of authentication, session management, security logging, and employee photos.
+
+2. CURRENT STATE (Assignment 3 Schema)
+
+Collections:
+1. employees
+   - _id: ObjectId (MongoDB default)
+   - employeeId: String (e.g., "E001")  #this needs to be removed
+   - name: String
+   - phone: String
+
+2. shifts
+   - _id: ObjectId (MongoDB default)
+   - shiftId: String (e.g., "S001")  #this needs to be removed
+   - date: String (ISO format)
+   - startTime: String (HH:MM)
+   - endTime: String (HH:MM)
+
+3. assignments (junction collection)  #this needs to be removed
+   - _id: ObjectId
+   - employeeId: String (references employees.employeeId)
+   - shiftId: String (references shifts.shiftId)
+
+Relationships:
+- Many-to-Many via assignments collection (relational approach)
+
+3. TARGET STATE (Assignment 4 Schema)
+
+Collections:
+1. employees
+   - _id: ObjectId (MongoDB default, primary key)
+   - name: String
+   - phone: String
+   - photo: Binary/BSON or String (path/URL)  #new field going to be added
+
+2. shifts
+   - _id: ObjectId (MongoDB default, primary key)
+   - date: String (ISO format)
+   - startTime: String (HH:MM)
+   - endTime: String (HH:MM)
+   - employees: [ObjectId]  <-- NEW EMBEDDED ARRAY (refs to employees._id)
+
+3. users  <-- NEW COLLECTION
+   - _id: ObjectId
+   - username: String
+   - hashedPassword: String (SHA256)
+
+4. security_log  <-- NEW COLLECTION
+   - _id: ObjectId
+   - timestamp: Date
+   - username: String (or null if unknown)
+   - urlAccessed: String
+   - method: String (GET, POST, etc.)
+
+5. sessions  <-- NEW COLLECTION (if storing server-side)
+   - _id: ObjectId
+   - sessionId: String
+   - username: String
+   - createdAt: Date
+   - expiresAt: Date
+
+Relationships:
+- One-to-Many: Shift embeds Employee ObjectIds in employees array
+- One-to-Many: User has many Session entries
+- One-to-Many: System generates many SecurityLog entries
+
+4. COLLECTION CHANGES SUMMARY
+
+| Collection | Change Type | Description |
+|------------|-------------|-------------|
+| employees  | MODIFY      | Remove employeeId field; add photo field |
+| shifts     | MODIFY      | Remove shiftId field; add employees array |
+| assignments| DELETE      | Drop entire collection (data migrated to shifts) |
+| users      | CREATE      | New collection for authentication |
+| security_log| CREATE     | New collection for access logging |
+| sessions   | CREATE      | New collection for session storage (if server-side) |
+
+5. PERSISTENCE FUNCTIONS TO MODIFY/REMOVE
+
+TO BE REMOVED:
+- getAssignmentById(assignmentId)          // Collection no longer exists
+- getAssignmentsByEmployeeId(employeeId) // Replaced by embedded query
+- getAssignmentsByShiftId(shiftId)       // Replaced by embedded query
+- createAssignment(assignmentData)        // Replaced by updateShift push
+- deleteAssignment(assignmentId)          // Replaced by updateShift pull
+- updateAssignment(assignmentId, data)    // No longer needed
+
+TO BE MODIFIED:
+- getEmployeeById(id)          // Change from employeeId string to _id ObjectId
+- getShiftById(id)             // Change from shiftId string to _id ObjectId
+- createEmployee(employeeData) // Remove employeeId generation; return _id
+- createShift(shiftData)       // Remove shiftId generation; return _id
+- updateEmployee(id, data)     // Change parameter from employeeId to _id
+- updateShift(id, data)        // Change parameter from shiftId to _id
+- deleteEmployee(id)           // Change parameter from employeeId to _id
+- deleteShift(id)              // Change parameter from shiftId to _id
+- getAllEmployees()            // May need to handle photo field
+- getAllShifts()               // Must populate employees array or return with ObjectIds
+
+TO BE CREATED:
+- addEmployeeToShift(shiftId, employeeId)     // Push ObjectId to employees array
+- removeEmployeeFromShift(shiftId, employeeId) // Pull ObjectId from employees array
+- getShiftsByEmployeeId(employeeId)           // Query shifts where employees contains ObjectId
+- getEmployeesByShiftId(shiftId)              // Return populated employee documents
+- createUser(username, hashedPassword)        // For auth system
+- getUserByUsername(username)                 // For login validation
+- createSession(sessionData)                    // Session management
+- getSessionById(sessionId)                     // Session validation
+- deleteSession(sessionId)                      // Logout
+- createSecurityLog(logData)                    // Logging
+- updateEmployeePhoto(employeeId, photoData)  // Photo handling
+
+6. BUSINESS LOGIC CHANGES
+
+| Feature | Before | After |
+|---------|--------|-------|
+| Employee lookup | Find by employeeId "E001" | Find by ObjectId |
+| Shift lookup | Find by shiftId "S001" | Find by ObjectId |
+| Assign employee | Insert to assignments collection | Push ObjectId to shift.employees |
+| Unassign employee | Delete from assignments | Pull ObjectId from shift.employees |
+| View shift roster | Join assignments + employees | shift.employees contains direct refs |
+| Check conflicts | Query assignments collection | Query shifts.employees array |
+
+CRITICAL LOGIC CHANGE: Conflict Detection
+-----------------------------------------
+Before: Query assignments to see if employee already assigned to overlapping shift
+After: Query shifts where:
+  - employees array contains employee ObjectId
+  - date overlaps with new shift
+  - time range overlaps with new shift
+
+7. EMBEDDED ARRAY IMPACT ON UPDATE OPERATIONS
+
+OPERATION: Add Employee to Shift
+--------------------------------
+Before (Assignment 3):
+  db.assignments.insertOne({
+    employeeId: "E001",
+    shiftId: "S001"
+  })
+
+After (Assignment 4):
+  db.shifts.updateOne(
+    { _id: ObjectId("...") },
+    { $push: { employees: ObjectId("...") } }
+  )
+
+Considerations:
+- Must ensure employee ObjectId exists before pushing
+- Must check for duplicates (MongoDB $addToSet instead of $push?)
+- Atomic operation - no separate collection to synchronize
+
+OPERATION: Remove Employee from Shift
+-------------------------------------
+Before:
+  db.assignments.deleteOne({
+    employeeId: "E001",
+    shiftId: "S001"
+  })
+
+After:
+  db.shifts.updateOne(
+    { _id: ObjectId("...") },
+    { $pull: { employees: ObjectId("...") } }
+  )
+
+Considerations:
+- $pull removes all instances (safe since we prevent duplicates)
+- Atomic - no orphan records possible
+
+OPERATION: Delete Employee (Cascade Effects)
+--------------------------------------------
+Before:
+  1. Delete employee from employees collection
+  2. Delete all assignments with that employeeId
+
+After:
+  1. Delete employee from employees collection
+  2. Update ALL shifts where employees array contains this ObjectId:
+     db.shifts.updateMany(
+       { employees: employeeObjectId },
+       { $pull: { employees: employeeObjectId } }
+     )
+
+Risk: If step 2 fails, shifts will have dangling ObjectId references.
+Mitigation: Perform pull operation before delete, or use transaction.
+
+OPERATION: Get All Employees for a Shift
+------------------------------------------
+Before:
+  1. Find assignments with shiftId
+  2. Extract employeeIds
+  3. Find employees with those employeeIds
+
+After:
+  Option A (Aggregation):
+    db.shifts.aggregate([
+      { $match: { _id: shiftObjectId } },
+      { $lookup: {
+          from: "employees",
+          localField: "employees",
+          foreignField: "_id",
+          as: "employeeDetails"
+      }}
+    ])
+
+  Option B (Application-side join):
+    1. Find shift, get employees array of ObjectIds
+    2. Find employees where _id in that array
+
+Performance: Embedded array + $lookup is generally faster than junction table
+for read-heavy operations, but requires careful indexing.
+
+8. RISKS AND COMPLICATIONS
+
+RISK 1: Data Loss During Migration
+-----------------------------------
+Description: transform_db.js script fails mid-migration, leaving database
+             in inconsistent state.
+Mitigation: 
+- Create full database backup before running transform_db.js
+- Run migration in a test environment first
+- Make script idempotent where possible (safe to run multiple times)
+- Verify each step with Compass before proceeding
+
+RISK 2: ObjectId String Conversion Errors
+------------------------------------------
+Description: Application receives string ID from URL/form, fails to convert
+             to ObjectId properly, causing "document not found" errors.
+Mitigation:
+- Create centralized validation function: validateObjectId(string)
+- Always wrap conversions in try-catch (invalid ObjectId throws error)
+- Consistent use of new mongodb.ObjectId(id) throughout codebase
+
+RISK 3: Session Management Complexity
+-------------------------------------
+Description: Without express-sessions, manual implementation may have
+             security vulnerabilities (session fixation, hijacking).
+Mitigation:
+- Use cryptographically secure random session IDs (crypto.randomBytes)
+- Implement proper HttpOnly, Secure, SameSite cookie attributes
+- Store session expiration server-side, not just in cookie
+- Regenerate session ID on login (prevent fixation)
+
+RISK 4: Embedded Array Size Limits
+----------------------------------
+Description: MongoDB documents have 16MB limit. If a shift could have
+             thousands of employees, employees array could exceed limit.
+Likelihood: Low for scheduling system (shifts typically have < 50 employees)
+Mitigation:
+- Monitor array size in application logic
+- Document assumption that shifts have reasonable employee counts
+- If needed in future, could revert to referencing pattern
+
+RISK 5: Photo Storage Performance
+---------------------------------
+Description: Storing binary image data in MongoDB documents may impact
+             query performance and memory usage.
+Options:
+- Store as BSON Binary (GridFS if large)
+- Store file path/URL, keep images on filesystem/S3
+- Decision: [YOUR CHOICE HERE - justify based on expected photo size]
+
+RISK 6: Security Log Collection Growth
+--------------------------------------
+Description: High-traffic system could generate massive security_log collection.
+Mitigation:
+- Implement log rotation/archival strategy (out of scope but note for future)
+- Create index on timestamp for efficient querying
+- Consider capped collection if storage is concern
+
+RISK 7: Concurrent Update Conflicts
+----------------------------------
+Description: Two users simultaneously modifying same shift's employees array
+             could cause race conditions.
+Mitigation:
+- Use MongoDB's atomic $push/$pull operations (document-level locking)
+- For complex updates, consider findAndModify with version checking
+- Acceptable risk for this assignment scope
+
+9. IMPLEMENTATION ORDER
+Phase 1: Planning & Backup (Current)
+  [X] Complete this refactor plan document
+  [ ] Commit A4_refactor_plan.txt to GitHub
+  [ ] Create full database backup
+  [ ] Create test database copy for migration testing
+
+Phase 2: Database Migration
+  [ ] Implement Step 1: Add empty employees array to all shifts
+  [ ] Verify in Compass
+  [ ] Implement Step 2: Migrate assignments to embedded arrays
+  [ ] Verify employee ObjectIds correctly embedded
+  [ ] Implement Step 3: Remove obsolete fields and drop assignments
+  [ ] Verify final schema matches target state
+  [ ] Commit transform_db.js
+
+Phase 3: Application Refactoring
+  [ ] Update all persistence functions (Section 5)
+  [ ] Update business logic for embedded arrays
+  [ ] Update all route handlers to use _id instead of custom IDs
+  [ ] Test all CRUD operations
+  [ ] Commit changes
+
+Phase 4: Authentication & Security
+  [ ] Create users collection in Compass (2 test accounts)
+  [ ] Implement custom session middleware
+  [ ] Implement auth middleware
+  [ ] Create login/logout routes
+  [ ] Protect all routes with auth middleware
+  [ ] Implement security logging middleware
+  [ ] Create README.md with test credentials
+  [ ] Commit changes
+
+Phase 5: Employee Photos
+  [ ] Add photo field to employee schema
+  [ ] Implement photo upload/display
+  [ ] Add access control for photos
+  [ ] Commit changes
+
+Phase 6: Testing & Submission
+  [ ] Full system test
+  [ ] Verify GitHub commits and tags
+  [ ] Create submission zip
+  [ ] Submit to D2L with GitHub link
+
