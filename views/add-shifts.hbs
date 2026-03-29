@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit {{employee.name}} – Scheduling System</title>
+    <title>Add Shift – Scheduling System</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background: #f4f4f4; color: #333; }
@@ -21,8 +21,11 @@
         input { width: 100%; padding: 0.6rem 0.8rem; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; margin-bottom: 1rem; }
         input:focus { outline: none; border-color: #4a90d9; }
         .hint { font-size: 0.78rem; color: #888; margin-top: -0.8rem; margin-bottom: 1rem; }
-        .actions { display: flex; gap: 0.75rem; }
-        .btn { padding: 0.5rem 1.2rem; border-radius: 4px; font-size: 0.95rem; border: none; cursor: pointer; text-decoration: none; }
+        .error-msg { background: #fdecea; color: #c0392b; padding: 0.6rem 0.8rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; }
+        .row { display: flex; gap: 1rem; }
+        .row > div { flex: 1; }
+        .actions { display: flex; gap: 0.75rem; margin-top: 0.5rem; }
+        .btn { padding: 0.5rem 1.2rem; border-radius: 4px; font-size: 0.95rem; border: none; cursor: pointer; text-decoration: none; display: inline-block; }
         .btn-primary { background: #4a90d9; color: #fff; }
         .btn-primary:hover { background: #357abd; }
         .btn-secondary { background: #e0e0e0; color: #333; }
@@ -41,21 +44,34 @@
     </header>
 
     <main>
-        <a class="back" href="/employee/{{employee._id}}">← Back to {{employee.name}}</a>
+        <a class="back" href="/shifts">← Back to shifts</a>
 
         <div class="card">
-            <h2>Edit employee</h2>
-            <form method="POST" action="/employee/{{employee._id}}/edit">
-                <label for="name">Name</label>
-                <input type="text" id="name" name="name" value="{{employee.name}}" required>
+            <h2>Add Shift</h2>
 
-                <label for="phone">Phone</label>
-                <input type="text" id="phone" name="phone" value="{{employee.phone}}" required>
-                <p class="hint">Format: 1234-5678</p>
+            {{#if error}}
+                <div class="error-msg">{{error}}</div>
+            {{/if}}
+
+            <form method="POST" action="/shifts/add">
+                <label for="date">Date</label>
+                <input type="date" id="date" name="date" value="{{formData.date}}" required>
+
+                <div class="row">
+                    <div>
+                        <label for="startTime">Start Time</label>
+                        <input type="time" id="startTime" name="startTime" value="{{formData.startTime}}" required>
+                    </div>
+                    <div>
+                        <label for="endTime">End Time</label>
+                        <input type="time" id="endTime" name="endTime" value="{{formData.endTime}}" required>
+                    </div>
+                </div>
+                <p class="hint">End time must be after start time.</p>
 
                 <div class="actions">
-                    <button class="btn btn-primary" type="submit">Save changes</button>
-                    <a class="btn btn-secondary" href="/employee/{{employee._id}}">Cancel</a>
+                    <button class="btn btn-primary" type="submit">Add Shift</button>
+                    <a class="btn btn-secondary" href="/shifts">Cancel</a>
                 </div>
             </form>
         </div>
