@@ -202,18 +202,6 @@ Before:
   3. Find employees with those employeeIds
 
 After:
-  Option A (Aggregation):
-    db.shifts.aggregate([
-      { $match: { _id: shiftObjectId } },
-      { $lookup: {
-          from: "employees",
-          localField: "employees",
-          foreignField: "_id",
-          as: "employeeDetails"
-      }}
-    ])
-
-  Option B (Application-side join):
     1. Find shift, get employees array of ObjectIds
     2. Find employees where _id in that array
 
