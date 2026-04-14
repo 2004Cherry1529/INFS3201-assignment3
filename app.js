@@ -5,8 +5,43 @@ const path = require('path');
 const business = require('./business');
 
 const app = express();
+const multer = require('multer');
+const fs = require('fs');
 
-app.engine('hbs', engine({ extname: '.hbs', defaultLayout: false }));
+// Configure multer for file upload
+const storage = multer.diskStorage({
+    destination: function(req, file, cb) {
+        const uploadDir = path.join(__dirname, 'uploads');
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+        cb(null, uploadDir);
+    },
+    filename: function(req, file, cb) {
+        const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, unique + '-' + file.originalname);
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/pdf') {
+            cb(null, true);
+        } else {
+            cb(new Error('Only PDF files allowed'));
+        }
+    }
+});
+app.engine('hbs', engine({
+    extname: '.hbs',
+    defaultLayout: false,
+    helpers: {
+        eq: (a, b) => a === b
+    }
+}));
+
+
+
 app.set('view engine', 'hbs');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -58,39 +93,111 @@ async function requireAuth(req, res, next) {
     next();
 }
 
-// ─── Auth Routes ──────────────────────────────────────────────────────────────
-
+// GET login page
 app.get('/login', (req, res) => {
-    res.render('login');
+    res.render('login', { step: 'password' }); // step indicates password or 2FA
 });
 
+// POST login - Step 1: Verify password
 app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const session = await business.login(username, password);
-        if (!session) {
-            return res.render('login', { error: 'Invalid username or password' });
+        const result = await business.initiateLogin(username, password);
+        
+        if (!result.success) {
+            return res.render('login', { error: result.message, step: 'password' });
         }
+        
+        if (result.needs2FA) {
+            // Show 2FA code entry page
+            return res.render('login', { 
+                step: '2fa', 
+                tempSessionId: result.tempSessionId,
+                username: result.username,
+                message: result.message
+            });
+        }
+    } catch (error) {
+        res.render('login', { error: error.message, step: 'password' });
+    }
+});
+
+// POST verify 2FA - Step 2
+app.post('/verify-2fa', async (req, res) => {
+    try {
+        const { username, code, tempSessionId } = req.body;
+        const result = await business.verify2FALogin(username, code, tempSessionId);
+        
+        if (!result.success) {
+            return res.render('login', { 
+                step: '2fa', 
+                error: result.message,
+                tempSessionId,
+                username
+            });
+        }
+        
+        // Set session cookie
         res.setHeader('Set-Cookie',
-            `sessionId=${session.sessionId}; HttpOnly; SameSite=Strict; Path=/`
+            `sessionId=${result.session.sessionId}; HttpOnly; SameSite=Strict; Path=/`
         );
         res.redirect('/');
     } catch (error) {
-        res.send('Login error: ' + error.message);
+        res.render('login', { step: '2fa', error: error.message });
     }
 });
-
-app.post('/logout', async (req, res) => {
+// GET employee documents page
+app.get('/employee/:id/documents', requireAuth, async (req, res) => {
     try {
-        const sessionId = parseCookie(req, 'sessionId');
-        if (sessionId) await business.logout(sessionId);
-        res.setHeader('Set-Cookie', 'sessionId=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
-        res.redirect('/login');
+        const employee = await business.findEmployee(req.params.id);
+        if (!employee) return res.send('Employee not found');
+        
+        const documents = await business.getEmployeeDocuments(req.params.id);
+        res.render('employee-documents', { 
+            employee, 
+            documents,
+            username: req.session.username 
+        });
     } catch (error) {
-        res.send('Logout error: ' + error.message);
+        res.send('Error: ' + error.message);
     }
 });
 
+// POST upload document
+app.post('/employee/:id/documents/upload', requireAuth, upload.single('document'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.send('No file uploaded');
+        }
+        
+        await business.uploadEmployeeDocument(req.params.id, req.file);
+        res.redirect(`/employee/${req.params.id}/documents`);
+    } catch (error) {
+        res.send('Upload error: ' + error.message);
+    }
+});
+
+// GET download document (protected - no public static route)
+app.get('/employee/:id/documents/:docId/download', requireAuth, async (req, res) => {
+    try {
+        const doc = await business.getDocumentForDownload(req.params.id, req.params.docId);
+        if (!doc) return res.status(404).send('Document not found');
+        
+        res.download(doc.filepath, doc.filename);
+    } catch (error) {
+        res.send('Download error: ' + error.message);
+    }
+});
+
+// POST delete document
+app.post('/employee/:id/documents/:docId/delete', requireAuth, async (req, res) => {
+    try {
+        await business.deleteEmployeeDocument(req.params.id, req.params.docId);
+        res.redirect(`/employee/${req.params.id}/documents`);
+    } catch (error) {
+        res.send('Delete error: ' + error.message);
+    }
+});
 // ─── Employee Routes ──────────────────────────────────────────────────────────
 
 // Landing — list all employees
@@ -209,42 +316,36 @@ app.post('/employee/:id/delete', requireAuth, async (req, res) => {
 // ─── Shift Routes ─────────────────────────────────────────────────────────────
 
 // List all shifts with populated employee names
+// ─── GET all shifts ───────────────────────────────
 app.get('/shifts', requireAuth, async (req, res) => {
     try {
         const shifts = await business.getAllShifts();
-        for (const shift of shifts) {
-            shift.employeeDetails = await business.getEmployeesByShiftId(shift._id.toString());
-            const hour = parseInt(shift.startTime.split(':')[0]);
+
+        for (let i = 0; i < shifts.length; i++) {
+            const shift = shifts[i];
+
+            shift.employeeDetails =
+                await business.getEmployeesByShiftId(shift._id.toString());
+
+            const hour = parseInt(shift.startTime.slice(0, 2));
             shift.isMorning = hour < 12;
         }
-        res.render('shifts', { shifts, username: req.session.username });
+
+        res.render('shifts', {
+            shifts,
+            username: req.session.username
+        });
+
     } catch (error) {
         res.send('Error: ' + error.message);
     }
 });
 
-// GET add shift form
-app.get('/shifts', requireAuth, async (req, res) => {
-    try {
-        
-        const shifts = await business.getAllShifts();
-        console.log(
-            shifts
-        )
-        for (const shift of shifts) {
-            const shiftId = shiftId.toString(); 
-            shift.employeeDetails = await business.getEmployeesByShiftId(shiftId);
-            const hour = parseInt(shift.startTime.split(':')[0]);
-            shift.isMorning = hour < 12;
-        }
-
-        res.render('shifts', { shifts, username: req.session.username });
-    } catch (error) {
-        res.send('Error: ' + error.message);
-    }
+app.get('/shifts/add', requireAuth, (req, res) => {
+    res.render('add-shift', {
+        username: req.session.username
+    });
 });
-
-
 // POST add shift
 app.post('/shifts/add', requireAuth, async (req, res) => {
     try {
@@ -253,23 +354,24 @@ app.post('/shifts/add', requireAuth, async (req, res) => {
         if (!date || !startTime || !endTime) {
             return res.render('add-shift', {
                 error: 'All fields are required',
-                formData: { date, startTime, endTime },
                 username: req.session.username
             });
         }
 
-        const [sh, sm] = startTime.split(':').map(Number);
-        const [eh, em] = endTime.split(':').map(Number);
-        if (eh * 60 + em <= sh * 60 + sm) {
+        const sh = parseInt(startTime.slice(0, 2));
+        const eh = parseInt(endTime.slice(0, 2));
+
+        if (eh <= sh) {
             return res.render('add-shift', {
                 error: 'End time must be after start time',
-                formData: { date, startTime, endTime },
                 username: req.session.username
             });
         }
 
         await business.createShift({ date, startTime, endTime });
+
         res.redirect('/shifts');
+
     } catch (error) {
         res.send('Error adding shift: ' + error.message);
     }
