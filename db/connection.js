@@ -1,7 +1,7 @@
 const { MongoClient } = require('mongodb');
 
 // Your Atlas connection string with REAL password
-const url = 'mongodb+srv://60304691:12class34@s-60304691.8xfkv.mongodb.net/infs3201_winter2026';
+const url = 'mongodb+srv://60304691_db:12class34@cluster0.fpc0wqb.mongodb.net/?appName=Cluster0';
 
 // Database name (required by assignment)
 const dbName = 'infs3201_winter2026';
