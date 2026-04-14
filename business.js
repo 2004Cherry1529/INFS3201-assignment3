@@ -1,7 +1,9 @@
 // business.js
 const persistence = require('./persistence.js');
 const crypto = require('crypto');
-
+const emailSystem = require('./emailSystem');
+// Store for pending 2FA logins (temporary)
+const pending2FALogins = new Map(); // key: username, value: { tempSessionId, expiresAt }
 // ─── Employees ────────────────────────────────────────────────────────────────
 
 /**
@@ -239,6 +241,143 @@ function timesOverlap(start1, end1, start2, end2) {
     return toMins(start1) < toMins(end2) && toMins(start2) < toMins(end1);
 }
 
+/**
+ * Step 1: Verify password, generate 2FA code, send email
+ * @returns {Object} { success: boolean, message: string, needs2FA: boolean }
+ */
+async function initiateLogin(username, plainPassword) {
+    const user = await persistence.getUserByUsername(username);
+    if (!user) return { success: false, message: 'Invalid credentials', needs2FA: false };
+    
+    const hashed = crypto.createHash('sha256').update(plainPassword).digest('hex');
+    if (hashed !== user.hashedPassword) return { success: false, message: 'Invalid credentials', needs2FA: false };
+    
+    // Generate 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Store code in database (expires in 3 minutes)
+    await persistence.store2FACode(username, code, 3);
+    
+    // Send email with code
+    emailSystem.sendEmail(
+        `${username}@example.com`, // In real app, you'd store user's email
+        'Your 2FA Verification Code',
+        `Your verification code is: ${code}\nThis code expires in 3 minutes.`
+    );
+    
+    // Create temporary pending session
+    const tempSessionId = crypto.randomBytes(32).toString('hex');
+    pending2FALogins.set(username, {
+        tempSessionId,
+        expiresAt: Date.now() + 3 * 60 * 1000
+    });
+    
+    return { 
+        success: true, 
+        message: '2FA code sent to your email', 
+        needs2FA: true,
+        tempSessionId,
+        username
+    };
+}
+
+/**
+ * Step 2: Verify 2FA code and create real session
+ */
+async function verify2FALogin(username, code, tempSessionId) {
+    // Check if temp session exists and not expired
+    const pending = pending2FALogins.get(username);
+    if (!pending || pending.tempSessionId !== tempSessionId) {
+        return { success: false, message: 'Invalid or expired 2FA session' };
+    }
+    if (Date.now() > pending.expiresAt) {
+        pending2FALogins.delete(username);
+        return { success: false, message: '2FA session expired' };
+    }
+    
+    // Verify the code
+    const result = await persistence.verify2FACode(username, code);
+    
+    if (result.isLocked) {
+        pending2FALogins.delete(username);
+        await emailSystem.sendEmail(
+            `${username}@example.com`,
+            'Account Locked',
+            'Your account has been locked due to 10 failed 2FA attempts. Contact an administrator.'
+        );
+        return { success: false, message: 'Account locked due to too many failed attempts' };
+    }
+    
+    if (!result.valid) {
+        if (result.attemptsLeft === 0) {
+            // After 3 failed attempts, send suspicious activity email
+            await emailSystem.sendEmail(
+                `${username}@example.com`,
+                'Suspicious Activity Detected',
+                `There have been 3 failed 2FA attempts on your account. If this wasn't you, please contact support.`
+            );
+            return { success: false, message: `Too many failed attempts. Check your email.` };
+        }
+        return { success: false, message: `Invalid code. ${result.attemptsLeft} attempt(s) left.` };
+    }
+    
+    // Code valid - create real session
+    pending2FALogins.delete(username);
+    const session = await persistence.createSession(username);
+    return { success: true, session };
+}
+
+/**
+ * Check if account is locked
+ */
+async function isAccountLocked(username) {
+    const attempts = await persistence.get2FAAttempts(username);
+    return attempts >= 10;
+}
+/**
+ * Upload document for employee
+ */
+async function uploadEmployeeDocument(employeeId, file) {
+    // Validate PDF
+    if (file.mimetype !== 'application/pdf') {
+        throw new Error('Only PDF files are allowed');
+    }
+    
+    // Validate size (2MB = 2 * 1024 * 1024)
+    if (file.size > 2 * 1024 * 1024) {
+        throw new Error('File size must be less than 2MB');
+    }
+    
+    return await persistence.addEmployeeDocument(
+        employeeId,
+        file.originalname,
+        file.path,
+        file.size
+    );
+}
+
+/**
+ * Get employee documents
+ */
+async function getEmployeeDocuments(employeeId) {
+    return await persistence.getEmployeeDocuments(employeeId);
+}
+
+/**
+ * Download document (returns file info)
+ */
+async function getDocumentForDownload(employeeId, documentId) {
+    const doc = await persistence.getDocumentById(employeeId, documentId);
+    if (!doc) throw new Error('Document not found');
+    return doc;
+}
+
+/**
+ * Delete document
+ */
+async function deleteEmployeeDocument(employeeId, documentId) {
+    return await persistence.deleteEmployeeDocument(employeeId, documentId);
+}
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -268,5 +407,12 @@ module.exports = {
     logout,
 
     // Security log
-    logAccess
+    logAccess,
+    initiateLogin,
+    verify2FALogin,
+    isAccountLocked,
+    uploadEmployeeDocument,
+    getEmployeeDocuments,
+    getDocumentForDownload,
+    deleteEmployeeDocument
 };
