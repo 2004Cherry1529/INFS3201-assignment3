@@ -344,6 +344,160 @@ async function touchSession(sessionId) {
         { $set: { expiresAt } }
     );
 }
+// ─── Two-Factor Authentication (2FA) ─────────────────────────────────────────
+
+/**
+ * Store 2FA code for a user during login attempt
+ * @param {string} username
+ * @param {string} code - 6-digit code
+ * @param {number} expiresInMinutes - default 3 minutes
+ */
+async function store2FACode(username, code, expiresInMinutes = 3) {
+    try{
+        const db = await connectDB();
+        const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+    
+        await db.collection('two_fa_codes').updateOne(
+            { username },
+            { $set: { code, expiresAt, attempts: 0 } },
+            { upsert: true }
+        );}
+    catch(error){
+        console.log(error)
+    }
+}
+
+/**
+ * Verify 2FA code for a user
+ * @returns {Object} { valid: boolean, attemptsLeft: number, isLocked: boolean }
+ */
+async function verify2FACode(username, enteredCode) {
+    const db = await connectDB();
+    const record = await db.collection('two_fa_codes').findOne({ username });
+    
+    if (!record) return { valid: false, attemptsLeft: 0, isLocked: false };
+    
+    // Check if locked (10+ attempts)
+    if (record.attempts >= 10) {
+        return { valid: false, attemptsLeft: 0, isLocked: true };
+    }
+    
+    // Check if expired
+    if (new Date() > record.expiresAt) {
+        await db.collection('two_fa_codes').deleteOne({ username });
+        return { valid: false, attemptsLeft: 0, isLocked: false };
+    }
+    
+    // Verify code
+    if (record.code === enteredCode) {
+        await db.collection('two_fa_codes').deleteOne({ username });
+        return { valid: true, attemptsLeft: 3, isLocked: false };
+    }
+    
+    // Wrong code - increment attempts
+    const newAttempts = record.attempts + 1;
+    await db.collection('two_fa_codes').updateOne(
+        { username },
+        { $set: { attempts: newAttempts } }
+    );
+    
+    const attemptsLeft = 3 - newAttempts;
+    return { valid: false, attemptsLeft: Math.max(0, attemptsLeft), isLocked: false };
+}
+
+/**
+ * Get 2FA attempts for a user
+ */
+async function get2FAAttempts(username) {
+    const db = await connectDB();
+    const record = await db.collection('two_fa_codes').findOne({ username });
+    return record ? record.attempts : 0;
+}
+// ─── Employee Documents ─────────────────────────────────────────────────────
+
+/**
+ * Add a document for an employee
+ * @param {string} employeeId - ObjectId string
+ * @param {string} filename - Original filename
+ * @param {string} filepath - Stored file path
+ * @param {number} size - File size in bytes
+ * @returns {Promise<Object>}
+ */
+async function addEmployeeDocument(employeeId, filename, filepath, size) {
+    const db = await connectDB();
+    const oid = toObjectId(employeeId);
+    
+    // Check current document count
+    const employee = await db.collection('employees').findOne({ _id: oid });
+    const currentDocs = employee?.documents || [];
+    
+    if (currentDocs.length >= 5) {
+        throw new Error('Maximum 5 documents per employee');
+    }
+    
+    const doc = {
+        _id: new ObjectId(),
+        filename: filename,
+        filepath: filepath,
+        size: size,
+        uploadedAt: new Date()
+    };
+    
+    await db.collection('employees').updateOne(
+        { _id: oid },
+        { $push: { documents: doc } }
+    );
+    
+    return doc;
+}
+
+/**
+ * Get all documents for an employee
+ */
+async function getEmployeeDocuments(employeeId) {
+    const db = await connectDB();
+    const employee = await db.collection('employees').findOne(
+        { _id: toObjectId(employeeId) },
+        { projection: { documents: 1 } }
+    );
+    return employee?.documents || [];
+}
+
+/**
+ * Get a single document by ID
+ */
+async function getDocumentById(employeeId, documentId) {
+    const db = await connectDB();
+    const employee = await db.collection('employees').findOne(
+        { 
+            _id: toObjectId(employeeId),
+            'documents._id': toObjectId(documentId)
+        },
+        { projection: { 'documents.$': 1 } }
+    );
+    return employee?.documents?.[0] || null;
+}
+
+/**
+ * Delete a document
+ */
+async function deleteEmployeeDocument(employeeId, documentId) {
+    const db = await connectDB();
+    const doc = await getDocumentById(employeeId, documentId);
+    
+    if (doc && doc.filepath) {
+        // Delete file from filesystem
+        const fs = require('fs');
+        if (fs.existsSync(doc.filepath)) {
+            fs.unlinkSync(doc.filepath);
+        }
+    }
+    
+    await db.collection('employees').updateOne(
+        { _id: toObjectId(employeeId) },
+        { $pull: { documents: { _id: toObjectId(documentId) } } }
+    );
+}
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -382,5 +536,11 @@ module.exports = {
     // Config
     getDailyMaxHours,
 
-    touchSession
+    touchSession,
+    addEmployeeDocument,
+    deleteEmployeeDocument,
+    getEmployeeDocuments,
+    verify2FACode,
+    get2FAAttempts,
+    store2FACode
 };
