@@ -6,14 +6,16 @@
   "author": "",
   "type": "commonjs",
   "main": "presentation.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node restaurant"
-  },
+"scripts": {
+  "test": "echo \"Error: no test specified\" && exit 1",
+  "start": "node app.js",
+  "dev": "node app.js"
+},
   "dependencies": {
     "express": "^5.2.1",
     "express-handlebars": "^8.0.6",
     "mongodb": "^7.1.1",
+    "multer": "^2.1.1",
     "prompt-sync": "^4.2.0"
   }
 }

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OTP Verification</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #f4f4f4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+.card {
+    background: white;
+    padding: 2rem;
+    width: 320px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+h2 { text-align: center; margin-bottom: 1rem; }
+input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+}
+button {
+    width: 100%;
+    padding: 10px;
+    background: #4a90d9;
+    color: white;
+    border: none;
+}
+.error { color: red; text-align: center; }
+</style>
+
+</head>
+<body>
+
+<div class="card">
+    <h2>2-Step Verification</h2>
+
+    <p>Enter 6-digit code sent to your email</p>
+
+    <input type="text" id="otp" placeholder="Enter OTP">
+
+    <button onclick="verifyOTP()">Verify</button>
+
+    <p id="msg" class="error"></p>
+</div>
+
+<script src="/js/auth.js"></script>
+
+</body>
+</html>
