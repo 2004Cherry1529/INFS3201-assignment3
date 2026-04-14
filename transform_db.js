@@ -4,7 +4,7 @@
 const { MongoClient, ObjectId } = require('mongodb');
 const crypto = require('crypto');
 
-const url = 'mongodb+srv://60304691:12class34@s-60304691.8xfkv.mongodb.net/infs3201_winter2026';
+const url = 'mongodb+srv://60304691_db:12class34@cluster0.fpc0wqb.mongodb.net/?appName=Cluster0';
 const dbName = 'infs3201_winter2026';
 
 async function transformDatabase() {
